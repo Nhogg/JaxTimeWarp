@@ -1,5 +1,7 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 
 @jax.jit
 def compute_dtw_matrix(X, Y):
@@ -9,6 +11,24 @@ def compute_dtw_matrix(X, Y):
     # Parallelized distance matrix computation (C)
     # Broadcasts to (N, M, 7) then sums squared differences to yield (N, M)
     C = jnp.sum((X[:, None, :] - Y[None, :, :]) ** 2. axis=-1)
+
+    # Define Sakoe-Chiba Band Radius (path stray distance)
+    R = 10
+
+    # Coordinate grids for matrix indices
+    i_indices = jnp.arrange(N)[:, None]
+    j_indices = jnp.arrange(M)[None, :]
+
+    # Build boolean mask (True if inside band, false if in corners
+    # Condition: |i - j| <= R 
+    valid_band_mask = jnp.abs(i_indices - j_indices) <= R
+
+    # Convert mask to penalty tensor
+    # 0.0 added cost for valid cells, jnp.inf added cost for invalid cells
+    band_penalty = jnp.where(valid_band_mask, 0.0, jnp.inf)
+
+    # Apply constraint to cost matrix
+    C_banded = C + band_pentalty
    
     N, M = C.shape
 
@@ -36,3 +56,4 @@ def compute_dtw_matrix(X, Y):
     _, D_matrix = jax.lax.scan(row_scan, D_init, C)
 
     return D_matrix[-1, -1], D_matrix
+
